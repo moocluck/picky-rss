@@ -1,23 +1,16 @@
 services:
   app:
-    build:
-      context: .
-      dockerfile: docker/php/Dockerfile
+    image: ghcr.io/moocluck/picky-rss:latest
     container_name: picky_rss_app
     restart: unless-stopped
-    command: sh docker/php/docker-entrypoint.sh
     ports:
       - "8080:80"
     env_file:
       - .env
-      - path: .env.local
-        required: false
     environment:
+      APP_ENV: prod
       APP_CACHE_DIR: /tmp/picky_rss/cache
       APP_LOG_DIR: /tmp/picky_rss/log
-    volumes:
-      - .:/srv/picky_rss
-      - ./var:/srv/picky_rss/var:rw
     depends_on:
       - db
 
@@ -26,11 +19,9 @@ services:
     container_name: picky_rss_db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: picky_rss
-      POSTGRES_USER: symfony
-      POSTGRES_PASSWORD: change_me_in_dev
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: ${POSTGRES_DB:-picky_rss}
+      POSTGRES_USER: ${POSTGRES_USER:-symfony}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
 
