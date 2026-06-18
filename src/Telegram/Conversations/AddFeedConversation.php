@@ -2,20 +2,21 @@
 
 namespace App\Telegram\Conversations;
 
-use SergiX44\Nutgram\Conversations\Conversation;
-use SergiX44\Nutgram\Nutgram;
-use Doctrine\ORM\EntityManagerInterface;
-use App\Service\RssParser;
-use App\Service\NewsNotifier;
 use App\Entity\Feed;
 use App\Entity\FeedItem;
 use App\Entity\User;
+use App\Service\NewsNotifier;
+use App\Service\RssParser;
+use App\Service\TelegramChannelParser;
+use Doctrine\ORM\EntityManagerInterface;
+use SergiX44\Nutgram\Conversations\Conversation;
+use SergiX44\Nutgram\Nutgram;
 
 class AddFeedConversation extends Conversation
 {
     public function start(Nutgram $bot)
     {
-        $bot->sendMessage('Пожалуйста, отправьте ссылку на RSS-ленту:');
+        $bot->sendMessage('Пожалуйста, отправьте ссылку на RSS-ленту или @юзернейм Telegram-канала:');
         $this->next('askUrl');
     }
 
@@ -32,23 +33,47 @@ class AddFeedConversation extends Conversation
         $url = trim($bot->message()->text);
 
         if ($url === '/cancel' || $url === 'Отмена') {
-            $bot->sendMessage('Добавление ленты отменено.');
+            $bot->sendMessage('Добавление отменено.');
             $this->end();
             return;
         }
 
-        if (!filter_var($url, FILTER_VALIDATE_URL)) {
-            $bot->sendMessage("Это не похоже на корректную ссылку.\nПожалуйста, отправьте правильный URL-адрес (или напишите /cancel для отмены):");
+        $isTelegram = false;
+        $tgUsername = null;
+
+        // Detect Telegram channel links or username
+        if (str_starts_with($url, '@')) {
+            $isTelegram = true;
+            $tgUsername = ltrim($url, '@');
+            $url = "https://t.me/" . $tgUsername;
+        } elseif (preg_match('/(?:t\.me|telegram\.me)\/([a-zA-Z0-9_]{5,})/i', $url, $matches)) {
+            $isTelegram = true;
+            $tgUsername = $matches[1];
+            $url = "https://t.me/" . $tgUsername;
+        }
+
+        if (!$isTelegram && !filter_var($url, FILTER_VALIDATE_URL)) {
+            $bot->sendMessage("Это не похоже на корректную ссылку или @юзернейм.\nПожалуйста, отправьте правильный URL-адрес или @юзернейм канала (или напишите /cancel для отмены):");
             $this->next('askUrl');
             return;
         }
 
-        $bot->sendMessage('Проверяю RSS-ленту...');
+        $bot->sendMessage($isTelegram ? 'Проверяю Telegram-канал...' : 'Проверяю RSS-ленту...');
 
         // Parse feed
-        $feedDto = $parser->parse($url);
+        if ($isTelegram) {
+            /** @var TelegramChannelParser $tgParser */
+            $tgParser = $bot->getContainer()->get(TelegramChannelParser::class);
+            $feedDto = $tgParser->parse($tgUsername);
+        } else {
+            $feedDto = $parser->parse($url);
+        }
+
         if (!$feedDto) {
-            $bot->sendMessage("Не удалось прочитать RSS-ленту по этой ссылке.\nУбедитесь, что ссылка ведет на валидный RSS/Atom фид, и отправьте её снова (или напишите /cancel для отмены):");
+            $bot->sendMessage($isTelegram ?
+                "Не удалось прочитать этот Telegram-канал.\nУбедитесь, что канал публичный и имя указано верно, затем отправьте его снова (или напишите /cancel):" :
+                "Не удалось прочитать RSS-ленту по этой ссылке.\nУбедитесь, что ссылка ведет на валидный RSS/Atom фид, и отправьте её снова (или напишите /cancel для отмены):"
+            );
             $this->next('askUrl');
             return;
         }
@@ -70,6 +95,7 @@ class AddFeedConversation extends Conversation
             $feed = new Feed();
             $feed->setUrl($url);
             $feed->setTitle($feedDto->title);
+            $feed->setType($isTelegram ? 'telegram' : 'rss');
             $em->persist($feed);
         }
 
@@ -97,9 +123,9 @@ class AddFeedConversation extends Conversation
                 $feedItem->setImageUrl($itemDto->imageUrl);
                 $feedItem->setPublishedAt($itemDto->publishedAt);
                 $em->persist($feedItem);
-                
+
                 $feed->addFeedItem($feedItem);
-                
+
                 if ($latestFeedItem === null) {
                     $latestFeedItem = $feedItem;
                 }

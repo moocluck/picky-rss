@@ -22,6 +22,9 @@ services:
     App\Service\RssParser:
         public: true
 
+    App\Service\TelegramChannelParser:
+        public: true
+
     App\Service\NewsNotifier:
         public: true
 
@@ -30,6 +33,18 @@ services:
         public: true
 
 
+
+    App\Telegram\:
+        resource: '../src/Telegram'
+        public: true
+        shared: false
+
+    App\Service\CustomNutgramFactory:
+        arguments:
+            $telegramProxy: '%env(resolve:TELEGRAM_PROXY)%'
+
+    SergiX44\NutgramBundle\DependencyInjection\Factory\NutgramFactory:
+        alias: App\Service\CustomNutgramFactory
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

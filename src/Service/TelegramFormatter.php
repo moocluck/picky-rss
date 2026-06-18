@@ -14,58 +14,139 @@ class TelegramFormatter
         $html = preg_replace('/<\/strong>/i', '</b>', $html);
         $html = preg_replace('/<em[^>]*>/i', '<i>', $html);
         $html = preg_replace('/<\/em>/i', '</i>', $html);
+
+        // Load HTML fragment using DOMDocument
+        $dom = new \DOMDocument();
+        // Wrap in XML encoding declaration and root div to handle UTF-8 properly
+        $wrappedHtml = '<?xml encoding="UTF-8"><div>' . $html . '</div>';
+        @$dom->loadHTML($wrappedHtml, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
         
-        // Strip all tags except those supported by Telegram HTML parse mode
-        $html = strip_tags($html, '<b><i><u><ins><s><strike><del><a><code><pre>');
-        
-        // Unescape HTML entities that might remain
-        $html = html_entity_decode($html, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        
-        // Re-encode essential XML characters that must be escaped in Telegram HTML
-        // (but only <, >, and & that are not part of HTML tags)
-        // Actually, we can do a simple replacement of &, <, > if they are not part of tags,
-        // but since strip_tags kept valid tags, we must escape & that are not part of entities.
-        // A simpler way: since we stripped all unsupported tags, we just make sure
-        // we encode special chars, but wait: if we do htmlspecialchars, it will escape <b> etc.
-        // So we can do a placeholder replace or just use a helper to escape raw text.
-        // Let's implement a clean escaping or just keep it simple:
-        // Telegram requires:
-        // & must be replaced with &amp;
-        // < must be replaced with &lt;
-        // > must be replaced with &gt;
-        // except when they are part of tags.
-        // Since we only have a few tags, we can replace them with placeholders, escape, and restore:
-        
-        $placeholders = [];
-        $i = 0;
-        
-        $html = preg_replace_callback('/<\/?(b|i|u|ins|s|strike|del|code|pre|a\s+href="[^"]*")>/i', function($matches) use (&$placeholders, &$i) {
-            $placeholder = "___TAG_PLACEHOLDER_{$i}___";
-            $placeholders[$placeholder] = $matches[0];
-            $i++;
-            return $placeholder;
-        }, $html);
-        
-        // Now escape characters for Telegram
-        $html = htmlspecialchars($html, ENT_NOQUOTES, 'UTF-8');
-        
-        // Restore tags
-        foreach ($placeholders as $placeholder => $tag) {
-            $html = str_replace($placeholder, $tag, $html);
+        $root = $dom->getElementsByTagName('div')->item(0);
+        if ($root) {
+            self::sanitizeNode($root);
+            // Get inner HTML of root
+            $html = '';
+            foreach ($root->childNodes as $child) {
+                $html .= $dom->saveHTML($child);
+            }
         }
-        
+
         // Replace multiple consecutive newlines with maximum two
         $html = preg_replace("/\n{3,}/", "\n\n", $html);
         
         return trim($html);
     }
-    
-    public static function truncate(string $text, int $limit = 1000): string
+
+    private static function sanitizeNode(\DOMNode $node): void
     {
-        if (mb_strlen($text) <= $limit) {
-            return $text;
+        $allowedTags = ['b', 'i', 'u', 'ins', 's', 'strike', 'del', 'code', 'pre', 'a'];
+        
+        // Loop backwards because we are modifying the child list
+        for ($i = $node->childNodes->length - 1; $i >= 0; $i--) {
+            $child = $node->childNodes->item($i);
+            
+            if ($child->nodeType === XML_ELEMENT_NODE) {
+                $tagName = strtolower($child->nodeName);
+                
+                if (in_array($tagName, $allowedTags)) {
+                    // Sanitize children first
+                    self::sanitizeNode($child);
+                    
+                    // Clean attributes
+                    if ($tagName === 'a') {
+                        $href = $child->getAttribute('href');
+                        // Remove all attributes
+                        while ($child->attributes->length > 0) {
+                            $child->removeAttributeNode($child->attributes->item(0));
+                        }
+                        // Keep only href if present
+                        if ($href) {
+                            $child->setAttribute('href', $href);
+                        } else {
+                            self::unwrapNode($child);
+                        }
+                    } else {
+                        // Remove all attributes for other elements
+                        while ($child->attributes->length > 0) {
+                            $child->removeAttributeNode($child->attributes->item(0));
+                        }
+                    }
+                } else {
+                    // Tag not allowed, unwrap it (keep text/children, remove tag)
+                    self::sanitizeNode($child);
+                    self::unwrapNode($child);
+                }
+            }
+        }
+    }
+
+    private static function unwrapNode(\DOMElement $node): void
+    {
+        $parent = $node->parentNode;
+        if (!$parent) {
+            return;
         }
         
-        return mb_substr($text, 0, $limit - 3) . '...';
+        while ($node->childNodes->length > 0) {
+            $child = $node->childNodes->item(0);
+            $parent->insertBefore($child, $node);
+        }
+        
+        $parent->removeChild($node);
+    }
+    
+    public static function truncate(string $html, int $limit = 800): string
+    {
+        if (mb_strlen(strip_tags($html)) <= $limit) {
+            return $html;
+        }
+
+        $printedLength = 0;
+        $position = 0;
+        $tags = [];
+        $result = '';
+        $htmlLength = mb_strlen($html);
+
+        while ($printedLength < $limit && $position < $htmlLength) {
+            $char = mb_substr($html, $position, 1);
+            if ($char === '<') {
+                $tag = '';
+                while ($position < $htmlLength && mb_substr($html, $position, 1) !== '>') {
+                    $tag .= mb_substr($html, $position, 1);
+                    $position++;
+                }
+                $tag .= '>';
+                $position++;
+
+                if (preg_match('/<\s*\/([a-z0-9]+)/i', $tag, $matches)) {
+                    $tagName = strtolower($matches[1]);
+                    $key = array_search($tagName, $tags);
+                    if ($key !== false) {
+                        unset($tags[$key]);
+                    }
+                } elseif (preg_match('/<\s*([a-z0-9]+)/i', $tag, $matches)) {
+                    $tagName = strtolower($matches[1]);
+                    if (!str_ends_with($tag, '/>')) {
+                        $tags[] = $tagName;
+                    }
+                }
+                $result .= $tag;
+            } else {
+                $result .= $char;
+                $printedLength++;
+                $position++;
+            }
+        }
+
+        if ($printedLength >= $limit) {
+            $result .= '...';
+        }
+
+        // Close any unclosed tags in reverse order
+        foreach (array_reverse($tags) as $tagName) {
+            $result .= "</$tagName>";
+        }
+
+        return $result;
     }
 }

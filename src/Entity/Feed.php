@@ -14,13 +14,16 @@ class Feed
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
-    private ?int $id = null;
+    private int $id;
 
     #[ORM\Column(length: 500, unique: true)]
     private ?string $url = null;
 
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $title = null;
+
+    #[ORM\Column(length: 20, options: ['default' => 'rss'])]
+    private string $type = 'rss';
 
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $lastCheckedAt = null;
@@ -47,7 +50,7 @@ class Feed
         $this->feedItems = new ArrayCollection();
     }
 
-    public function getId(): ?int
+    public function getId(): int
     {
         return $this->id;
     }
@@ -146,6 +149,17 @@ class Feed
                 $feedItem->setFeed(null);
             }
         }
+        return $this;
+    }
+
+    public function getType(): string
+    {
+        return $this->type;
+    }
+
+    public function setType(string $type): static
+    {
+        $this->type = $type;
         return $this;
     }
 }

@@ -41,7 +41,7 @@ class RssParser
         
         // Use proxy if set in environment
         $isHttps = str_starts_with(strtolower($url), 'https://');
-        $proxy = getenv($isHttps ? 'HTTPS_PROXY' : 'HTTP_PROXY') ?: getenv($isHttps ? 'https_proxy' : 'http_proxy');
+        $proxy = getenv('PARSER_PROXY') ?: getenv($isHttps ? 'HTTPS_PROXY' : 'HTTP_PROXY') ?: getenv($isHttps ? 'https_proxy' : 'http_proxy');
         if ($proxy) {
             curl_setopt($ch, CURLOPT_PROXY, $proxy);
         }

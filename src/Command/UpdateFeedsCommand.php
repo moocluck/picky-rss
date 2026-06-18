@@ -5,6 +5,7 @@ namespace App\Command;
 use App\Entity\Feed;
 use App\Entity\FeedItem;
 use App\Service\RssParser;
+use App\Service\TelegramChannelParser;
 use App\Service\NewsNotifier;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -15,13 +16,14 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 
 #[AsCommand(
     name: 'app:update-feeds',
-    description: 'Check all active RSS feeds for new items and notify subscribers.',
+    description: 'Check all active RSS and Telegram feeds for new items and notify subscribers.',
 )]
 class UpdateFeedsCommand extends Command
 {
     public function __construct(
         private EntityManagerInterface $em,
         private RssParser $parser,
+        private TelegramChannelParser $tgParser,
         private NewsNotifier $notifier
     ) {
         parent::__construct();
@@ -50,7 +52,13 @@ class UpdateFeedsCommand extends Command
                 continue;
             }
 
-            $feedDto = $this->parser->parse($feed->getUrl());
+            if ($feed->getType() === 'telegram') {
+                $username = str_replace('https://t.me/', '', $feed->getUrl());
+                $feedDto = $this->tgParser->parse($username);
+            } else {
+                $feedDto = $this->parser->parse($feed->getUrl());
+            }
+
             if (!$feedDto) {
                 $io->warning(sprintf('Failed to parse feed: %s', $feed->getUrl()));
                 continue;
