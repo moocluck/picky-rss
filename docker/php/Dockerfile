@@ -31,6 +31,9 @@ COPY . /srv/picky_news_feed
 ENV APP_ENV=prod
 ENV COMPOSER_ALLOW_SUPERUSER=1
 
+# Copy .env.dev.example to .env so Symfony post-install scripts compile successfully during build
+RUN cp .env.dev.example .env
+
 # Install composer production dependencies
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
