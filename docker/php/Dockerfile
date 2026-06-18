@@ -19,13 +19,13 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Prepare Nginx run directories
 RUN mkdir -p /run/nginx
 
-WORKDIR /srv/picky_rss
+WORKDIR /srv/picky_news_feed
 
 # Copy Nginx production configuration
 COPY docker/nginx/nginx-prod.conf /etc/nginx/http.d/default.conf
 
 # Copy project files into the image
-COPY . /srv/picky_rss
+COPY . /srv/picky_news_feed
 
 # Set Symfony production environment and allow Composer to run as root
 ENV APP_ENV=prod
@@ -38,10 +38,10 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction
 RUN mkdir -p var && chown -R www-data:www-data var
 
 # Make the entrypoint script executable
-RUN chmod +x /srv/picky_rss/docker/php/docker-entrypoint.sh
+RUN chmod +x /srv/picky_news_feed/docker/php/docker-entrypoint.sh
 
 # Expose port 80 for incoming webhook traffic via Nginx
 EXPOSE 80
 
 # Set the default entrypoint
-ENTRYPOINT ["/srv/picky_rss/docker/php/docker-entrypoint.sh"]
+ENTRYPOINT ["/srv/picky_news_feed/docker/php/docker-entrypoint.sh"]

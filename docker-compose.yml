@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: docker/php/Dockerfile
-    container_name: picky_rss_app
+    container_name: picky_news_feed_app
     restart: unless-stopped
     command: sh docker/php/docker-entrypoint.sh
     ports:
@@ -15,20 +15,20 @@ services:
       - path: .env.local
         required: false
     environment:
-      APP_CACHE_DIR: /tmp/picky_rss/cache
-      APP_LOG_DIR: /tmp/picky_rss/log
+      APP_CACHE_DIR: /tmp/picky_news_feed/cache
+      APP_LOG_DIR: /tmp/picky_news_feed/log
     volumes:
-      - .:/srv/picky_rss
-      - ./var:/srv/picky_rss/var:rw
+      - .:/srv/picky_news_feed
+      - ./var:/srv/picky_news_feed/var:rw
     depends_on:
       - db
 
   db:
     image: postgres:16-alpine
-    container_name: picky_rss_db
+    container_name: picky_news_feed_db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: picky_rss
+      POSTGRES_DB: picky_news_feed
       POSTGRES_USER: symfony
       POSTGRES_PASSWORD: change_me_in_dev
     ports:

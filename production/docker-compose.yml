@@ -2,8 +2,8 @@ version: '3.8'
 
 services:
   app:
-    image: ghcr.io/moocluck/picky-rss:latest
-    container_name: picky_rss_app
+    image: ghcr.io/moocluck/picky-news-feed:latest
+    container_name: picky_news_feed_app
     restart: unless-stopped
     ports:
       - "8080:80"
@@ -11,17 +11,17 @@ services:
       - .env
     environment:
       APP_ENV: prod
-      APP_CACHE_DIR: /tmp/picky_rss/cache
-      APP_LOG_DIR: /tmp/picky_rss/log
+      APP_CACHE_DIR: /tmp/picky_news_feed/cache
+      APP_LOG_DIR: /tmp/picky_news_feed/log
     depends_on:
       - db
 
   db:
     image: postgres:16-alpine
-    container_name: picky_rss_db
+    container_name: picky_news_feed_db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-picky_rss}
+      POSTGRES_DB: ${POSTGRES_DB:-picky_news_feed}
       POSTGRES_USER: ${POSTGRES_USER:-symfony}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
