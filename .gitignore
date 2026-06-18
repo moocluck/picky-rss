@@ -10,4 +10,6 @@
 ###< symfony/framework-bundle ###
 
 /.notes/
+/.vscode/
+
 
