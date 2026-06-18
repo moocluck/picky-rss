@@ -39,6 +39,13 @@ class RssParser
         curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); 
         
+        // Use proxy if set in environment
+        $isHttps = str_starts_with(strtolower($url), 'https://');
+        $proxy = getenv($isHttps ? 'HTTPS_PROXY' : 'HTTP_PROXY') ?: getenv($isHttps ? 'https_proxy' : 'http_proxy');
+        if ($proxy) {
+            curl_setopt($ch, CURLOPT_PROXY, $proxy);
+        }
+        
         $output = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
